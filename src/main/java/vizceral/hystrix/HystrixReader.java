@@ -104,7 +104,7 @@ public class HystrixReader
                                 .timeoutCount(objectNode.get("rollingCountTimeout").asInt() / 10)
                                 .errorCount((objectNode.get("rollingCountFailure").asInt() + objectNode.get("rollingCountSemaphoreRejected").asInt() + objectNode.get("rollingCountShortCircuited").asInt()) / 10)
                                 .requestCount(objectNode.get("rollingCountSuccess").asInt() / 10)
-                                .totalRequestCount(objectNode.get("rollingCountEmit").asInt() / 10)
+                                .totalRequestCount(objectNode.get("rollingCountSuccess").asInt() / 10)
                                 .group(group)
                                 .name(commandName)
                                 .isCircuitBreakerOpen(objectNode.get("isCircuitBreakerOpen").asBoolean())
