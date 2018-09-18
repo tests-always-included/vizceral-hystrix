@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.PrematureChannelClosureException;
 import io.netty.handler.codec.base64.Base64;
 import io.netty.handler.codec.http.HttpMethod;
 import io.reactivex.netty.RxNetty;
@@ -19,6 +20,8 @@ import rx.Observable;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Reads a hystrix event stream (typically from turbine) and emits events when items are received in the SSE stream.
@@ -116,16 +119,23 @@ public class HystrixReader
                         return null;
                     }
                 })
-                .filter(c -> c != null)
+                .filter(Objects::nonNull)
                 .onErrorResumeNext(ex ->
                 {
-                    if (!(ex instanceof UnknownClusterException || ex instanceof IllegalStateException))
-                    {
-                        logger.error("Exception from hystrix event for cluster " + cluster + " for region " + configuration.getRegionName() + ". Will retry", ex);
-                        return read();
-                    }
+                  if (ex instanceof UnknownClusterException) {
+                    logger.warn("UnknownClusterException returned");
+                      return Observable.error(ex);
+                  }
+                  if (ex instanceof IllegalStateException) {
+                    logger.warn("IllegalStateException returned");
                     return Observable.error(ex);
-                });
+                  }
+
+                  logger.error("Exception from hystrix event for cluster " + cluster + " for region " + configuration.getRegionName() + ". Will retry in 10s", ex);
+                  return Observable.timer(10, TimeUnit.SECONDS).flatMap(ignore -> read());
+                })
+                .doOnCompleted(() -> logger.info("Cluster {} got on completed", cluster))
+                .repeatWhen(observable -> observable.flatMap(ignore -> read()));
     }
 
     private static int sumFields(JsonNode objectNode, String... keys)
